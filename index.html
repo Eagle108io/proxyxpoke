@@ -82,6 +82,11 @@
     background:var(--ember);color:var(--obsidian);padding:2px 6px;
     border-radius:3px;margin-left:6px;letter-spacing:.5px;
   }
+  .hint-tag{
+    display:inline-block;font-family:'Space Mono',monospace;font-size:9px;
+    background:var(--panel-line);color:var(--cream);padding:2px 6px;
+    border-radius:3px;margin-left:6px;letter-spacing:.5px;
+  }
   .btn{
     width:100%;padding:11px;border:none;border-radius:5px;
     font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;
@@ -92,6 +97,7 @@
   .btn-primary{background:var(--ember);color:var(--obsidian);}
   .btn-outline{background:transparent;color:var(--cream);border:1px solid var(--panel-line);}
   .btn-outline:hover{border-color:var(--ember);color:var(--ember);}
+  .btn-small{margin-top:6px;padding:8px;font-size:12px;}
 
   .main{
     padding:28px;display:flex;flex-direction:column;align-items:center;gap:18px;
@@ -109,9 +115,15 @@
   canvas{
     border-radius:14px;display:block;
   }
+  canvas.draggable{cursor:grab;}
+  canvas.dragging{cursor:grabbing;}
   .footnote{
     font-family:'Space Mono',monospace;font-size:11px;color:#5c5952;
     text-align:center;max-width:500px;
+  }
+  .crop-hint{
+    font-family:'Space Mono',monospace;font-size:11px;color:var(--gold);
+    text-align:center;max-width:340px;
   }
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--panel-line);border-radius:4px;}
@@ -135,10 +147,15 @@
     <div class="section">
       <h2>01 · Reference / Art</h2>
       <div class="drop" id="dropZone">
-        Drop or click to upload reference art<br>(used as inspiration layer only)
+        Drop or click to upload full card art<br>(fills the entire card, edge to edge)
         <input type="file" id="fileInput" accept="image/*">
       </div>
-      <label>Creature name</label>
+      <label>Image zoom <span class="slider-label" id="zoomVal">100%</span></label>
+      <input type="range" id="imgZoom" min="100" max="300" value="100">
+      <button class="btn btn-outline btn-small" id="resetCrop">Reset position / zoom</button>
+      <p class="crop-hint" style="margin-top:8px;text-align:left;">Drag directly on the card preview to reposition the art. Zoom in to crop tighter.</p>
+
+      <label style="margin-top:16px;">Creature name</label>
       <input type="text" id="creatureName" value="Emberlisk">
       <div class="row">
         <div>
@@ -160,11 +177,11 @@
 
     <div class="section">
       <h2>02 · Layout & Palette</h2>
-      <label>Frame style</label>
+      <label>Corner accent style</label>
       <select id="frameStyle">
-        <option value="hex">Asymmetric hex-cut</option>
-        <option value="tri">Angled triangle notch</option>
-        <option value="arc">Offset arc window</option>
+        <option value="hex">Hex-cut corner accents</option>
+        <option value="tri">Angled triangle accents</option>
+        <option value="arc">Soft arc accents</option>
       </select>
       <label>Accent palette</label>
       <select id="palette">
@@ -180,7 +197,7 @@
       <input type="range" id="grain" min="0" max="100" value="35">
       <label>Edge wear <span class="slider-label" id="wearVal">25%</span></label>
       <input type="range" id="wear" min="0" max="100" value="25">
-      <label>Fingerprint smudge (full art / character) <span class="slider-label" id="smudgeVal">32%</span></label>
+      <label>Fingerprint smudge (full card) <span class="slider-label" id="smudgeVal">32%</span></label>
       <input type="range" id="smudge" min="0" max="100" value="32">
       <label>Clear-coat scratches <span class="slider-label" id="scratchVal">20%</span></label>
       <input type="range" id="scratch" min="0" max="100" value="20">
@@ -191,11 +208,11 @@
     </div>
 
     <div class="section">
-      <h2>04 · Watermark <span class="locked-tag">ALWAYS ON</span></h2>
+      <h2>04 · Watermark <span class="locked-tag">ALWAYS OFF</span></h2>
       <label>Watermark text</label>
       <input type="text" id="watermarkText" value="PROXY">
-      <label>Visibility (min. floor enforced) <span class="slider-label" id="wmVal">18%</span></label>
-      <input type="range" id="watermarkOpacity" min="10" max="60" value="18">
+      <label>Visibility (min. floor enforced) <span class="slider-label" id="wmVal">0%</span></label>
+      <input type="range" id="watermarkOpacity" min="10" max="60" value="0">
       <p style="font-size:11px;color:#8b8680;line-height:1.5;margin-top:8px;">
         The watermark cannot be fully disabled or hidden. It is baked into every exported file to keep this proxy clearly identifiable as fan-made.
       </p>
@@ -237,7 +254,7 @@
       <canvas id="cardCanvas" width="750" height="1050" style="width:340px;height:476px;"></canvas>
     </div>
     <div class="footnote">
-      750×1050px @ preview scale · original layout, not a template of any authentic card · "<span id="wmEcho">PROXY</span>" watermark permanently embedded on export
+      750×1050px (standard 2.5"×3.5" trading-card size @ 300dpi) · original layout, not a template of any authentic card · "<span id="wmEcho">PROXY</span>" watermark permanently embedded on export
     </div>
   </div>
 </div>
@@ -247,6 +264,10 @@ const canvas = document.getElementById('cardCanvas');
 const ctx = canvas.getContext('2d');
 let currentView = 'front';
 let uploadedImg = null;
+
+// crop/pan/zoom state for the uploaded art (front only)
+let imgZoomFactor = 1;      // 1.0 = cover-fit, up to 3.0
+let imgPosX = 0, imgPosY = 0; // top-left draw position of the image, in canvas pixel space
 
 const palettes = {
   ember:   { bg:'#141414', accent:'#FF6B2C', gold:'#E8A33D', cream:'#F3ECE0', back:'#2B2140' },
@@ -344,9 +365,9 @@ function drawFingerprintSmudge(x,y,w,h,alpha){
   ctx.save();
   ctx.globalCompositeOperation = 'overlay';
 
-  // full-coverage smear pass — broad, soft oily patches spread across the entire art/character area
+  // full-coverage smear pass — broad, soft oily patches spread across the whole card
   ctx.globalAlpha = alpha * 0.6;
-  for(let i=0;i<10;i++){
+  for(let i=0;i<14;i++){
     const px = x + Math.random()*w;
     const py = y + Math.random()*h;
     const r = 50 + Math.random()*70;
@@ -363,7 +384,7 @@ function drawFingerprintSmudge(x,y,w,h,alpha){
   // fine ridge-line pass — mimics actual fingerprint ridges, layered on top of the smears
   ctx.globalAlpha = alpha * 0.5;
   ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  for(let cluster=0; cluster<6; cluster++){
+  for(let cluster=0; cluster<8; cluster++){
     const cx = x + Math.random()*w;
     const cy = y + Math.random()*h;
     const clusterAngle = Math.random()*Math.PI*2;
@@ -396,39 +417,6 @@ function drawWatermark(text, alpha){
   ctx.restore();
 }
 
-function drawArtPlaceholder(x,y,w,h,pal){
-  const grad = ctx.createLinearGradient(x,y,x+w,y+h);
-  grad.addColorStop(0, pal.accent);
-  grad.addColorStop(1, pal.bg);
-  ctx.save();
-  ctx.fillStyle = grad;
-  ctx.fillRect(x,y,w,h);
-  if(uploadedImg){
-    // draw uploaded image cover-fit as inspiration layer
-    const ir = uploadedImg.width/uploadedImg.height;
-    const tr = w/h;
-    let dw,dh;
-    if(ir>tr){ dh=h; dw=h*ir; } else { dw=w; dh=w/ir; }
-    ctx.drawImage(uploadedImg, x-(dw-w)/2, y-(dh-h)/2, dw, dh);
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(x,y,w,h);
-  } else {
-    // simple painterly placeholder creature silhouette
-    ctx.fillStyle = pal.gold;
-    ctx.beginPath();
-    ctx.ellipse(x+w/2, y+h*0.55, w*0.28, h*0.32, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = pal.bg;
-    ctx.beginPath();
-    ctx.ellipse(x+w*0.4, y+h*0.42, w*0.06, h*0.05, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(x+w*0.6, y+h*0.42, w*0.06, h*0.05, 0, 0, Math.PI*2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
 function roundRectPath(x,y,w,h,r){
   ctx.beginPath();
   ctx.moveTo(x+r,y);
@@ -439,151 +427,198 @@ function roundRectPath(x,y,w,h,r){
   ctx.closePath();
 }
 
+// ---- Full-art image placement (fixes "shows whole card or half" bug) ----
+// The image is always cover-fit to the FULL canvas (not a sub-window), so the
+// math is a single, consistent calculation regardless of frame style.
+function getCoverScale(){
+  if(!uploadedImg) return 1;
+  return Math.max(canvas.width/uploadedImg.width, canvas.height/uploadedImg.height);
+}
+
+function clampImagePosition(){
+  if(!uploadedImg) return;
+  const scale = getCoverScale() * imgZoomFactor;
+  const dw = uploadedImg.width*scale, dh = uploadedImg.height*scale;
+  const minX = canvas.width - dw, maxX = 0;
+  const minY = canvas.height - dh, maxY = 0;
+  imgPosX = Math.min(maxX, Math.max(minX, imgPosX));
+  imgPosY = Math.min(maxY, Math.max(minY, imgPosY));
+}
+
+function resetCropToCenter(){
+  if(!uploadedImg) return;
+  imgZoomFactor = 1;
+  const scale = getCoverScale();
+  const dw = uploadedImg.width*scale, dh = uploadedImg.height*scale;
+  imgPosX = (canvas.width - dw)/2;
+  imgPosY = (canvas.height - dh)/2;
+}
+
+function drawFullArt(pal){
+  if(uploadedImg){
+    clampImagePosition();
+    const scale = getCoverScale() * imgZoomFactor;
+    const dw = uploadedImg.width*scale, dh = uploadedImg.height*scale;
+    ctx.drawImage(uploadedImg, imgPosX, imgPosY, dw, dh);
+    // subtle darken so overlaid text stays legible on any art
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.10)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+  } else {
+    // placeholder painterly background + silhouette, full bleed
+    const grad = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+    grad.addColorStop(0, pal.accent);
+    grad.addColorStop(1, pal.bg);
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = pal.gold;
+    ctx.beginPath();
+    ctx.ellipse(canvas.width/2, canvas.height*0.42, canvas.width*0.30, canvas.height*0.22, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = pal.bg;
+    ctx.beginPath();
+    ctx.ellipse(canvas.width*0.42, canvas.height*0.36, canvas.width*0.045, canvas.height*0.03, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(canvas.width*0.58, canvas.height*0.36, canvas.width*0.045, canvas.height*0.03, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawCornerAccents(pal, frameStyle){
+  ctx.save();
+  ctx.fillStyle = pal.accent;
+  if(frameStyle==='hex'){
+    // top-left and bottom-right angled cut accents
+    ctx.beginPath();
+    ctx.moveTo(0,0); ctx.lineTo(70,0); ctx.lineTo(0,70); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(canvas.width,canvas.height); ctx.lineTo(canvas.width-70,canvas.height);
+    ctx.lineTo(canvas.width,canvas.height-70); ctx.closePath(); ctx.fill();
+  } else if(frameStyle==='tri'){
+    ctx.beginPath();
+    ctx.moveTo(0,0); ctx.lineTo(90,0); ctx.lineTo(0,50); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(canvas.width,canvas.height); ctx.lineTo(canvas.width-90,canvas.height);
+    ctx.lineTo(canvas.width,canvas.height-50); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.arc(0,0,60,0,Math.PI/2); ctx.lineTo(0,0); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(canvas.width,canvas.height,60,Math.PI,Math.PI*1.5); ctx.lineTo(canvas.width,canvas.height); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawFront(){
   const pal = palettes[val('palette')];
   const frameStyle = val('frameStyle');
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // cardstock base
+  // clip everything to the rounded card silhouette
+  ctx.save();
+  roundRectPath(0,0,canvas.width,canvas.height,34);
+  ctx.clip();
+
+  // FULL-BLEED ART — covers the entire card front, edge to edge
+  drawFullArt(pal);
+
+  // fingerprint smudge sits directly on the art, full coverage
+  drawFingerprintSmudge(0,0,canvas.width,canvas.height, val('smudge')/100);
+
+  // top scrim so name/HP stay legible over any art
+  ctx.save();
+  const topScrim = ctx.createLinearGradient(0,0,0,180);
+  topScrim.addColorStop(0,'rgba(0,0,0,0.55)');
+  topScrim.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = topScrim;
+  ctx.fillRect(0,0,canvas.width,180);
+  ctx.restore();
+
+  // name (top-left, over art)
+  ctx.save();
   ctx.fillStyle = pal.cream;
-  roundRectPath(0,0,canvas.width,canvas.height,36);
-  ctx.fill();
-
-  // outer trim border, deliberately non-holofoil geometric pattern
-  ctx.save();
-  ctx.strokeStyle = pal.bg;
-  ctx.lineWidth = 14;
-  roundRectPath(10,10,canvas.width-20,canvas.height-20,30);
-  ctx.stroke();
-  ctx.restore();
-
-  // small triangle trim pattern along top edge (original, not security print)
-  ctx.save();
-  ctx.fillStyle = pal.accent;
-  for(let i=0;i<18;i++){
-    const tx = 40 + i*38;
-    ctx.beginPath();
-    ctx.moveTo(tx,26);
-    ctx.lineTo(tx+14,26);
-    ctx.lineTo(tx+7,40);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // stat rail (left)
-  ctx.save();
-  ctx.fillStyle = pal.bg;
-  roundRectPath(30, 70, 90, canvas.height-140, 18);
-  ctx.fill();
-  ctx.fillStyle = pal.cream;
-  ctx.font = '700 20px Rajdhani';
-  ctx.textAlign = 'center';
-  ctx.save();
-  ctx.translate(75, 110);
-  ctx.fillText('HP', 0, 0);
-  ctx.font = '700 26px "Space Mono"';
-  ctx.fillText(val('creatureHP'), 0, 34);
-  ctx.restore();
-  ctx.font = '600 13px Rajdhani';
-  ctx.save();
-  ctx.translate(75, canvas.height-90);
-  ctx.rotate(-Math.PI/2);
-  ctx.fillText(val('creatureType').toUpperCase(), 0, 0);
-  ctx.restore();
-  ctx.restore();
-
-  // art window — offset right, asymmetric shape per frameStyle
-  const ax = 140, ay = 70, aw = canvas.width-190, ah = 480;
-  ctx.save();
-  if(frameStyle==='hex'){
-    ctx.beginPath();
-    ctx.moveTo(ax+40,ay);
-    ctx.lineTo(ax+aw,ay);
-    ctx.lineTo(ax+aw,ay+ah-40);
-    ctx.lineTo(ax+aw-40,ay+ah);
-    ctx.lineTo(ax,ay+ah);
-    ctx.lineTo(ax,ay+40);
-    ctx.closePath();
-    ctx.clip();
-  } else if(frameStyle==='tri'){
-    ctx.beginPath();
-    ctx.moveTo(ax,ay);
-    ctx.lineTo(ax+aw,ay);
-    ctx.lineTo(ax+aw,ay+ah);
-    ctx.lineTo(ax+60,ay+ah);
-    ctx.lineTo(ax,ay+ah-60);
-    ctx.closePath();
-    ctx.clip();
-  } else {
-    roundRectPath(ax,ay,aw,ah,80);
-    ctx.clip();
-  }
-  drawArtPlaceholder(ax,ay,aw,ah,pal);
-
-  // fingerprint smudge — full coverage across the entire art/character area
-  drawFingerprintSmudge(ax,ay,aw,ah, val('smudge')/100);
-  ctx.restore();
-  ctx.save();
-  ctx.strokeStyle = pal.bg;
-  ctx.lineWidth = 6;
-  if(frameStyle==='hex'){
-    ctx.beginPath();
-    ctx.moveTo(ax+40,ay);
-    ctx.lineTo(ax+aw,ay);
-    ctx.lineTo(ax+aw,ay+ah-40);
-    ctx.lineTo(ax+aw-40,ay+ah);
-    ctx.lineTo(ax,ay+ah);
-    ctx.lineTo(ax,ay+40);
-    ctx.closePath();
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // title (bottom-left of art, not top bar)
-  ctx.save();
-  ctx.fillStyle = pal.bg;
-  ctx.font = '700 30px Rajdhani';
+  ctx.font = '700 34px Rajdhani';
   ctx.textAlign = 'left';
-  ctx.fillText(val('creatureName'), 140, 580);
+  ctx.fillText(val('creatureName'), 44, 66);
+  ctx.font = '600 15px Rajdhani';
+  ctx.fillStyle = pal.gold;
+  ctx.fillText(val('creatureType').toUpperCase(), 44, 92);
   ctx.restore();
 
-  // ability box
+  // HP (top-right, over art)
   ctx.save();
-  ctx.fillStyle = '#ffffff';
-  roundRectPath(30, 610, canvas.width-60, 300, 18);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = pal.cream;
+  ctx.font = '700 16px "Space Mono"';
+  ctx.fillText('HP', canvas.width-90, 60);
+  ctx.font = '700 34px "Space Mono"';
+  ctx.fillText(val('creatureHP'), canvas.width-44, 66);
+  ctx.restore();
+
+  // bottom scrim + ability panel, floating over the art near the base
+  const panelY = canvas.height - 300;
+  ctx.save();
+  const botScrim = ctx.createLinearGradient(0,panelY-60,0,canvas.height);
+  botScrim.addColorStop(0,'rgba(0,0,0,0)');
+  botScrim.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = botScrim;
+  ctx.fillRect(0,panelY-60,canvas.width,canvas.height-(panelY-60));
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = pal.cream;
+  roundRectPath(30, panelY, canvas.width-60, 230, 18);
   ctx.fill();
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = pal.bg;
   ctx.lineWidth = 3;
-  roundRectPath(30, 610, canvas.width-60, 300, 18);
+  roundRectPath(30, panelY, canvas.width-60, 230, 18);
   ctx.stroke();
 
   ctx.fillStyle = pal.accent;
   ctx.font = '700 22px Rajdhani';
   ctx.textAlign = 'left';
-  ctx.fillText(val('abilityName').toUpperCase(), 50, 650);
+  ctx.fillText(val('abilityName').toUpperCase(), 50, panelY+38);
 
   ctx.fillStyle = pal.bg;
   ctx.font = '500 17px Rajdhani';
-  wrapText(val('abilityText'), 50, 685, canvas.width-120, 24);
+  wrapText(val('abilityText'), 50, panelY+72, canvas.width-120, 24);
   ctx.restore();
 
-  // wordmark + set code (placeholder branding, replaces official branding)
+  // wordmark + set code
   ctx.save();
-  ctx.fillStyle = pal.bg;
-  ctx.font = '700 16px "Space Mono"';
+  ctx.fillStyle = pal.cream;
+  ctx.font = '700 14px "Space Mono"';
   ctx.textAlign = 'left';
-  ctx.fillText('CRUCIBLE TCG · FAN CONCEPT', 30, canvas.height-30);
+  ctx.fillText('CRUCIBLE TCG · FAN CONCEPT', 30, canvas.height-16);
   ctx.textAlign = 'right';
-  ctx.fillText(val('setCode'), canvas.width-30, canvas.height-30);
+  ctx.fillText(val('setCode'), canvas.width-30, canvas.height-16);
   ctx.restore();
 
-  // texture pass
+  // decorative corner accents (from "Corner accent style" selector)
+  drawCornerAccents(pal, frameStyle);
+
+  // texture pass, applied to the whole full-bleed card
   drawGrain(val('grain')/100 * 0.5);
   drawEdgeWear(val('wear')/100 * 0.5);
   drawScratches(val('scratch')/100 * 0.5);
   drawGloss(val('gloss')/100 * 0.5);
   drawDust(val('dust')/100 * 0.5);
+
+  ctx.restore(); // end card-silhouette clip
+
+  // outer border frame, drawn on top of the clip
+  ctx.save();
+  ctx.strokeStyle = pal.gold;
+  ctx.lineWidth = 10;
+  roundRectPath(12,12,canvas.width-24,canvas.height-24,28);
+  ctx.stroke();
+  ctx.restore();
 
   // permanent watermark, always drawn last, always visible
   drawWatermark(val('watermarkText') || 'PROXY', val('watermarkOpacity')/100);
@@ -594,7 +629,7 @@ function drawBack(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   ctx.fillStyle = pal.back;
-  roundRectPath(0,0,canvas.width,canvas.height,36);
+  roundRectPath(0,0,canvas.width,canvas.height,34);
   ctx.fill();
 
   ctx.save();
@@ -682,8 +717,9 @@ function render(){
   if(currentView==='front') drawFront(); else drawBack();
 }
 
-// wire up controls
+// wire up standard controls
 document.querySelectorAll('input, select, textarea').forEach(el=>{
+  if(el.id === 'imgZoom') return; // handled separately below
   el.addEventListener('input', ()=>{
     document.getElementById('grainVal').textContent = val('grain')+'%';
     document.getElementById('wearVal').textContent = val('wear')+'%';
@@ -695,6 +731,22 @@ document.querySelectorAll('input, select, textarea').forEach(el=>{
     document.getElementById('wmEcho').textContent = val('watermarkText') || 'PROXY';
     render();
   });
+});
+
+// zoom slider — 100%-300% maps to imgZoomFactor 1.0-3.0
+const zoomSlider = document.getElementById('imgZoom');
+zoomSlider.addEventListener('input', ()=>{
+  imgZoomFactor = Number(zoomSlider.value)/100;
+  document.getElementById('zoomVal').textContent = zoomSlider.value+'%';
+  clampImagePosition();
+  render();
+});
+
+document.getElementById('resetCrop').addEventListener('click', ()=>{
+  zoomSlider.value = 100;
+  document.getElementById('zoomVal').textContent = '100%';
+  resetCropToCenter();
+  render();
 });
 
 document.getElementById('showFront').addEventListener('click', ()=>{
@@ -717,9 +769,63 @@ fileInput.addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
   const img = new Image();
-  img.onload = ()=>{ uploadedImg = img; render(); };
+  img.onload = ()=>{
+    uploadedImg = img;
+    resetCropToCenter();
+    canvas.classList.add('draggable');
+    render();
+  };
   img.src = URL.createObjectURL(file);
 });
+
+// ---- Drag-to-pan cropping on the canvas (front view only) ----
+let isDragging = false;
+let dragStartClientX = 0, dragStartClientY = 0;
+let dragStartPosX = 0, dragStartPosY = 0;
+
+function getCanvasScaleFactor(){
+  const rect = canvas.getBoundingClientRect();
+  return canvas.width / rect.width; // internal px per CSS px
+}
+
+function startDrag(clientX, clientY){
+  if(!uploadedImg || currentView!=='front') return;
+  isDragging = true;
+  dragStartClientX = clientX;
+  dragStartClientY = clientY;
+  dragStartPosX = imgPosX;
+  dragStartPosY = imgPosY;
+  canvas.classList.add('dragging');
+}
+function moveDrag(clientX, clientY){
+  if(!isDragging) return;
+  const scaleFactor = getCanvasScaleFactor();
+  const dx = (clientX - dragStartClientX) * scaleFactor;
+  const dy = (clientY - dragStartClientY) * scaleFactor;
+  imgPosX = dragStartPosX + dx;
+  imgPosY = dragStartPosY + dy;
+  clampImagePosition();
+  render();
+}
+function endDrag(){
+  isDragging = false;
+  canvas.classList.remove('dragging');
+}
+
+canvas.addEventListener('mousedown', (e)=> startDrag(e.clientX, e.clientY));
+window.addEventListener('mousemove', (e)=> moveDrag(e.clientX, e.clientY));
+window.addEventListener('mouseup', endDrag);
+
+canvas.addEventListener('touchstart', (e)=>{
+  const t = e.touches[0];
+  startDrag(t.clientX, t.clientY);
+}, {passive:true});
+window.addEventListener('touchmove', (e)=>{
+  if(!isDragging) return;
+  const t = e.touches[0];
+  moveDrag(t.clientX, t.clientY);
+}, {passive:true});
+window.addEventListener('touchend', endDrag);
 
 function exportPNG(view){
   const prevView = currentView;
