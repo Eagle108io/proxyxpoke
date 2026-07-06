@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Crucible Proxy Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --obsidian:#141414;
+    --ember:#FF6B2C;
+    --gold:#E8A33D;
+    --cream:#F3ECE0;
+    --indigo:#2B2140;
+    --panel:#1c1a1e;
+    --panel-line:#33302f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--obsidian);
+    color:var(--cream);
+    font-family:'Rajdhani',sans-serif;
+    min-height:100vh;
+  }
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 28px;border-bottom:1px solid var(--panel-line);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand h1{
+    font-size:22px;letter-spacing:2px;margin:0;font-weight:700;
+    text-transform:uppercase;
+  }
+  .brand span{
+    font-family:'Space Mono',monospace;font-size:11px;color:var(--ember);
+    letter-spacing:1px;
+  }
+  .disclaimer{
+    font-family:'Space Mono',monospace;font-size:11px;color:#8b8680;
+    max-width:340px;text-align:right;line-height:1.5;
+  }
+  .layout{
+    display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 68px);
+  }
+  .sidebar{
+    border-right:1px solid var(--panel-line);
+    padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);
+  }
+  .section{margin-bottom:26px;}
+  .section h2{
+    font-size:12px;text-transform:uppercase;letter-spacing:2px;
+    color:var(--ember);margin:0 0 12px 0;font-weight:700;
+    border-bottom:1px solid var(--panel-line);padding-bottom:8px;
+  }
+  label{
+    display:block;font-size:12px;color:#b8b2a8;margin:10px 0 4px;
+    letter-spacing:.5px;
+  }
+  input[type=text], select, textarea{
+    width:100%;background:#0f0e10;border:1px solid var(--panel-line);
+    color:var(--cream);padding:8px 10px;border-radius:4px;
+    font-family:'Rajdhani',sans-serif;font-size:14px;
+  }
+  textarea{resize:vertical;min-height:50px;}
+  input[type=range]{width:100%;accent-color:var(--ember);}
+  .row{display:flex;gap:10px;}
+  .row > div{flex:1;}
+  .drop{
+    border:1px dashed var(--panel-line);border-radius:6px;
+    padding:18px;text-align:center;font-size:12px;color:#8b8680;
+    cursor:pointer;transition:border-color .2s;
+  }
+  .drop:hover{border-color:var(--ember);color:var(--ember);}
+  .drop input{display:none;}
+  .slider-label{
+    display:flex;justify-content:space-between;font-size:11px;
+    color:#8b8680;margin-top:8px;
+  }
+  .locked-tag{
+    display:inline-block;font-family:'Space Mono',monospace;font-size:9px;
+    background:var(--ember);color:var(--obsidian);padding:2px 6px;
+    border-radius:3px;margin-left:6px;letter-spacing:.5px;
+  }
+  .btn{
+    width:100%;padding:11px;border:none;border-radius:5px;
+    font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;
+    letter-spacing:1px;text-transform:uppercase;cursor:pointer;
+    margin-top:8px;transition:transform .1s, opacity .2s;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:var(--ember);color:var(--obsidian);}
+  .btn-outline{background:transparent;color:var(--cream);border:1px solid var(--panel-line);}
+  .btn-outline:hover{border-color:var(--ember);color:var(--ember);}
+
+  .main{
+    padding:28px;display:flex;flex-direction:column;align-items:center;gap:18px;
+  }
+  .view-toggle{display:flex;gap:8px;background:var(--panel);padding:5px;border-radius:8px;}
+  .view-toggle button{
+    background:transparent;border:none;color:#8b8680;padding:8px 20px;
+    border-radius:6px;font-family:'Rajdhani',sans-serif;font-weight:600;
+    font-size:13px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;
+  }
+  .view-toggle button.active{background:var(--ember);color:var(--obsidian);}
+  .canvas-wrap{
+    position:relative;filter:drop-shadow(0 20px 40px rgba(0,0,0,.6));
+  }
+  canvas{
+    border-radius:14px;display:block;
+  }
+  .footnote{
+    font-family:'Space Mono',monospace;font-size:11px;color:#5c5952;
+    text-align:center;max-width:500px;
+  }
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--panel-line);border-radius:4px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>Crucible Proxy Studio</h1>
+    <span>WEB EDITOR</span>
+  </div>
+  <div class="disclaimer">
+    Fan-made proxy generator for personal use only. Every export is permanently watermarked "PROXY" and is not suitable as an authentic card.
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <div class="section">
+      <h2>01 · Reference / Art</h2>
+      <div class="drop" id="dropZone">
+        Drop or click to upload reference art<br>(used as inspiration layer only)
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+      <label>Creature name</label>
+      <input type="text" id="creatureName" value="Emberlisk">
+      <div class="row">
+        <div>
+          <label>Type</label>
+          <input type="text" id="creatureType" value="Ember / Glass">
+        </div>
+        <div>
+          <label>HP</label>
+          <input type="text" id="creatureHP" value="70">
+        </div>
+      </div>
+      <label>Ability name</label>
+      <input type="text" id="abilityName" value="Cracked Ember">
+      <label>Ability text</label>
+      <textarea id="abilityText">Deals 20 damage. If this creature has edge wear, deal 10 more.</textarea>
+      <label>Set code (original, fictional)</label>
+      <input type="text" id="setCode" value="CB-014/FANART">
+    </div>
+
+    <div class="section">
+      <h2>02 · Layout & Palette</h2>
+      <label>Frame style</label>
+      <select id="frameStyle">
+        <option value="hex">Asymmetric hex-cut</option>
+        <option value="tri">Angled triangle notch</option>
+        <option value="arc">Offset arc window</option>
+      </select>
+      <label>Accent palette</label>
+      <select id="palette">
+        <option value="ember">Ember / Obsidian</option>
+        <option value="glass">Glass / Indigo</option>
+        <option value="verdant">Verdant / Copper</option>
+      </select>
+    </div>
+
+    <div class="section">
+      <h2>03 · Texture Layers</h2>
+      <label>Paper grain <span class="slider-label" id="grainVal">35%</span></label>
+      <input type="range" id="grain" min="0" max="100" value="35">
+      <label>Edge wear <span class="slider-label" id="wearVal">25%</span></label>
+      <input type="range" id="wear" min="0" max="100" value="25">
+      <label>Fingerprint smudge (full art / character) <span class="slider-label" id="smudgeVal">32%</span></label>
+      <input type="range" id="smudge" min="0" max="100" value="32">
+      <label>Clear-coat scratches <span class="slider-label" id="scratchVal">20%</span></label>
+      <input type="range" id="scratch" min="0" max="100" value="20">
+      <label>Gloss sweep <span class="slider-label" id="glossVal">40%</span></label>
+      <input type="range" id="gloss" min="0" max="100" value="40">
+      <label>Dust particles <span class="slider-label" id="dustVal">15%</span></label>
+      <input type="range" id="dust" min="0" max="100" value="15">
+    </div>
+
+    <div class="section">
+      <h2>04 · Watermark <span class="locked-tag">ALWAYS ON</span></h2>
+      <label>Watermark text</label>
+      <input type="text" id="watermarkText" value="PROXY">
+      <label>Visibility (min. floor enforced) <span class="slider-label" id="wmVal">18%</span></label>
+      <input type="range" id="watermarkOpacity" min="10" max="60" value="18">
+      <p style="font-size:11px;color:#8b8680;line-height:1.5;margin-top:8px;">
+        The watermark cannot be fully disabled or hidden. It is baked into every exported file to keep this proxy clearly identifiable as fan-made.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>06 · Print Material Guide</h2>
+      <p style="font-size:12px;color:#b8b2a8;line-height:1.6;margin:0 0 10px;">
+        Fingerprint smudges and paper grain only read as "real" on the right stock. Recommended for hobby printing:
+      </p>
+      <div style="background:#0f0e10;border:1px solid var(--panel-line);border-radius:6px;padding:12px;margin-bottom:8px;">
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--ember);margin-bottom:4px;">BEST — SOFT-TOUCH LAMINATE</div>
+        <div style="font-size:12px;color:#cfc9bd;line-height:1.5;">Velvet/soft-touch lamination over 300–350gsm cardstock. Grabs skin oils visibly, matches the smudge layer closely. Same finish as premium game/phone boxes.</div>
+      </div>
+      <div style="background:#0f0e10;border:1px solid var(--panel-line);border-radius:6px;padding:12px;margin-bottom:8px;">
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--gold);margin-bottom:4px;">GOOD — MATTE / UNCOATED CARDSTOCK</div>
+        <div style="font-size:12px;color:#cfc9bd;line-height:1.5;">Plain matte 300gsm+ cardstock, no coating. Shows grain and light smudging naturally, easiest to source at local print shops.</div>
+      </div>
+      <div style="background:#0f0e10;border:1px solid var(--panel-line);border-radius:6px;padding:12px;">
+        <div style="font-family:'Space Mono',monospace;font-size:11px;color:#8b8680;margin-bottom:4px;">AVOID — HIGH-GLOSS / HOLOGRAPHIC</div>
+        <div style="font-size:12px;color:#cfc9bd;line-height:1.5;">Glossy UV coating and holographic laminate resist fingerprints (defeating the effect) and edge closer to authentic security-print finishes, which this tool avoids by design.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>07 · Export</h2>
+      <button class="btn btn-primary" id="exportFront">Export Front (PNG)</button>
+      <button class="btn btn-outline" id="exportBack">Export Back (PNG)</button>
+    </div>
+
+  </div>
+
+  <div class="main">
+    <div class="view-toggle">
+      <button id="showFront" class="active">Front</button>
+      <button id="showBack">Back</button>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="cardCanvas" width="750" height="1050" style="width:340px;height:476px;"></canvas>
+    </div>
+    <div class="footnote">
+      750×1050px @ preview scale · original layout, not a template of any authentic card · "<span id="wmEcho">PROXY</span>" watermark permanently embedded on export
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('cardCanvas');
+const ctx = canvas.getContext('2d');
+let currentView = 'front';
+let uploadedImg = null;
+
+const palettes = {
+  ember:   { bg:'#141414', accent:'#FF6B2C', gold:'#E8A33D', cream:'#F3ECE0', back:'#2B2140' },
+  glass:   { bg:'#101425', accent:'#4FB6E8', gold:'#8FD3E8', cream:'#EAF3F8', back:'#1a2440' },
+  verdant: { bg:'#12180f', accent:'#7FBF4D', gold:'#C97A3D', cream:'#F1F0E4', back:'#2a2c14' },
+};
+
+function seededNoise(w,h){
+  const c = document.createElement('canvas');
+  c.width=w; c.height=h;
+  const cx = c.getContext('2d');
+  const imgData = cx.createImageData(w,h);
+  for(let i=0;i<imgData.data.length;i+=4){
+    const v = Math.random()*255;
+    imgData.data[i]=v; imgData.data[i+1]=v; imgData.data[i+2]=v; imgData.data[i+3]=255;
+  }
+  cx.putImageData(imgData,0,0);
+  return c;
+}
+const grainTile = seededNoise(128,128);
+
+function val(id){ return document.getElementById(id).value; }
+
+function drawGrain(alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.globalCompositeOperation = 'overlay';
+  const pattern = ctx.createPattern(grainTile,'repeat');
+  ctx.fillStyle = pattern;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.restore();
+}
+
+function drawScratches(alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#ffffff';
+  ctx.globalCompositeOperation = 'overlay';
+  for(let i=0;i<40;i++){
+    ctx.lineWidth = Math.random()*0.6+0.2;
+    ctx.beginPath();
+    const x1 = Math.random()*canvas.width, y1 = Math.random()*canvas.height;
+    const len = Math.random()*60+10;
+    const ang = Math.random()*Math.PI*2;
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x1+Math.cos(ang)*len, y1+Math.sin(ang)*len);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGloss(alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const grad = ctx.createLinearGradient(0,0,canvas.width,canvas.height*0.6);
+  grad.addColorStop(0,'rgba(255,255,255,0)');
+  grad.addColorStop(0.45,'rgba(255,255,255,0.35)');
+  grad.addColorStop(0.55,'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.restore();
+}
+
+function drawDust(alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#ffffff';
+  for(let i=0;i<70;i++){
+    const x = Math.random()*canvas.width, y = Math.random()*canvas.height;
+    const r = Math.random()*1.2+0.2;
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawEdgeWear(alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#000000';
+  const corners = [[0,0],[canvas.width,0],[0,canvas.height],[canvas.width,canvas.height]];
+  corners.forEach(([cx0,cy0])=>{
+    for(let i=0;i<6;i++){
+      const r = Math.random()*10+4;
+      ctx.beginPath();
+      ctx.arc(cx0 + (Math.random()-0.5)*30, cy0 + (Math.random()-0.5)*30, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+}
+
+function drawFingerprintSmudge(x,y,w,h,alpha){
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+
+  // full-coverage smear pass — broad, soft oily patches spread across the entire art/character area
+  ctx.globalAlpha = alpha * 0.6;
+  for(let i=0;i<10;i++){
+    const px = x + Math.random()*w;
+    const py = y + Math.random()*h;
+    const r = 50 + Math.random()*70;
+    const grad = ctx.createRadialGradient(px,py,2,px,py,r);
+    grad.addColorStop(0,'rgba(255,255,255,0.45)');
+    grad.addColorStop(0.6,'rgba(255,255,255,0.15)');
+    grad.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(px,py,r,r*0.65,Math.random()*Math.PI,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // fine ridge-line pass — mimics actual fingerprint ridges, layered on top of the smears
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  for(let cluster=0; cluster<6; cluster++){
+    const cx = x + Math.random()*w;
+    const cy = y + Math.random()*h;
+    const clusterAngle = Math.random()*Math.PI*2;
+    const clusterSize = 20 + Math.random()*18;
+    for(let ring=0; ring<7; ring++){
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      const rad = clusterSize * (0.3 + ring*0.12);
+      ctx.ellipse(cx,cy, rad, rad*0.8, clusterAngle, Math.random()*0.4, Math.PI*1.6+Math.random()*0.4);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawWatermark(text, alpha){
+  ctx.save();
+  ctx.globalAlpha = Math.max(alpha, 0.10);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 26px "Space Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.translate(canvas.width/2, canvas.height/2);
+  ctx.rotate(-Math.PI/8);
+  for(let row=-6; row<=6; row++){
+    for(let col=-3; col<=3; col++){
+      ctx.fillText(text, col*220, row*110);
+    }
+  }
+  ctx.restore();
+}
+
+function drawArtPlaceholder(x,y,w,h,pal){
+  const grad = ctx.createLinearGradient(x,y,x+w,y+h);
+  grad.addColorStop(0, pal.accent);
+  grad.addColorStop(1, pal.bg);
+  ctx.save();
+  ctx.fillStyle = grad;
+  ctx.fillRect(x,y,w,h);
+  if(uploadedImg){
+    // draw uploaded image cover-fit as inspiration layer
+    const ir = uploadedImg.width/uploadedImg.height;
+    const tr = w/h;
+    let dw,dh;
+    if(ir>tr){ dh=h; dw=h*ir; } else { dw=w; dh=w/ir; }
+    ctx.drawImage(uploadedImg, x-(dw-w)/2, y-(dh-h)/2, dw, dh);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(x,y,w,h);
+  } else {
+    // simple painterly placeholder creature silhouette
+    ctx.fillStyle = pal.gold;
+    ctx.beginPath();
+    ctx.ellipse(x+w/2, y+h*0.55, w*0.28, h*0.32, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = pal.bg;
+    ctx.beginPath();
+    ctx.ellipse(x+w*0.4, y+h*0.42, w*0.06, h*0.05, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x+w*0.6, y+h*0.42, w*0.06, h*0.05, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function roundRectPath(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawFront(){
+  const pal = palettes[val('palette')];
+  const frameStyle = val('frameStyle');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // cardstock base
+  ctx.fillStyle = pal.cream;
+  roundRectPath(0,0,canvas.width,canvas.height,36);
+  ctx.fill();
+
+  // outer trim border, deliberately non-holofoil geometric pattern
+  ctx.save();
+  ctx.strokeStyle = pal.bg;
+  ctx.lineWidth = 14;
+  roundRectPath(10,10,canvas.width-20,canvas.height-20,30);
+  ctx.stroke();
+  ctx.restore();
+
+  // small triangle trim pattern along top edge (original, not security print)
+  ctx.save();
+  ctx.fillStyle = pal.accent;
+  for(let i=0;i<18;i++){
+    const tx = 40 + i*38;
+    ctx.beginPath();
+    ctx.moveTo(tx,26);
+    ctx.lineTo(tx+14,26);
+    ctx.lineTo(tx+7,40);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // stat rail (left)
+  ctx.save();
+  ctx.fillStyle = pal.bg;
+  roundRectPath(30, 70, 90, canvas.height-140, 18);
+  ctx.fill();
+  ctx.fillStyle = pal.cream;
+  ctx.font = '700 20px Rajdhani';
+  ctx.textAlign = 'center';
+  ctx.save();
+  ctx.translate(75, 110);
+  ctx.fillText('HP', 0, 0);
+  ctx.font = '700 26px "Space Mono"';
+  ctx.fillText(val('creatureHP'), 0, 34);
+  ctx.restore();
+  ctx.font = '600 13px Rajdhani';
+  ctx.save();
+  ctx.translate(75, canvas.height-90);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(val('creatureType').toUpperCase(), 0, 0);
+  ctx.restore();
+  ctx.restore();
+
+  // art window — offset right, asymmetric shape per frameStyle
+  const ax = 140, ay = 70, aw = canvas.width-190, ah = 480;
+  ctx.save();
+  if(frameStyle==='hex'){
+    ctx.beginPath();
+    ctx.moveTo(ax+40,ay);
+    ctx.lineTo(ax+aw,ay);
+    ctx.lineTo(ax+aw,ay+ah-40);
+    ctx.lineTo(ax+aw-40,ay+ah);
+    ctx.lineTo(ax,ay+ah);
+    ctx.lineTo(ax,ay+40);
+    ctx.closePath();
+    ctx.clip();
+  } else if(frameStyle==='tri'){
+    ctx.beginPath();
+    ctx.moveTo(ax,ay);
+    ctx.lineTo(ax+aw,ay);
+    ctx.lineTo(ax+aw,ay+ah);
+    ctx.lineTo(ax+60,ay+ah);
+    ctx.lineTo(ax,ay+ah-60);
+    ctx.closePath();
+    ctx.clip();
+  } else {
+    roundRectPath(ax,ay,aw,ah,80);
+    ctx.clip();
+  }
+  drawArtPlaceholder(ax,ay,aw,ah,pal);
+
+  // fingerprint smudge — full coverage across the entire art/character area
+  drawFingerprintSmudge(ax,ay,aw,ah, val('smudge')/100);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = pal.bg;
+  ctx.lineWidth = 6;
+  if(frameStyle==='hex'){
+    ctx.beginPath();
+    ctx.moveTo(ax+40,ay);
+    ctx.lineTo(ax+aw,ay);
+    ctx.lineTo(ax+aw,ay+ah-40);
+    ctx.lineTo(ax+aw-40,ay+ah);
+    ctx.lineTo(ax,ay+ah);
+    ctx.lineTo(ax,ay+40);
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // title (bottom-left of art, not top bar)
+  ctx.save();
+  ctx.fillStyle = pal.bg;
+  ctx.font = '700 30px Rajdhani';
+  ctx.textAlign = 'left';
+  ctx.fillText(val('creatureName'), 140, 580);
+  ctx.restore();
+
+  // ability box
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  roundRectPath(30, 610, canvas.width-60, 300, 18);
+  ctx.fill();
+  ctx.strokeStyle = pal.bg;
+  ctx.lineWidth = 3;
+  roundRectPath(30, 610, canvas.width-60, 300, 18);
+  ctx.stroke();
+
+  ctx.fillStyle = pal.accent;
+  ctx.font = '700 22px Rajdhani';
+  ctx.textAlign = 'left';
+  ctx.fillText(val('abilityName').toUpperCase(), 50, 650);
+
+  ctx.fillStyle = pal.bg;
+  ctx.font = '500 17px Rajdhani';
+  wrapText(val('abilityText'), 50, 685, canvas.width-120, 24);
+  ctx.restore();
+
+  // wordmark + set code (placeholder branding, replaces official branding)
+  ctx.save();
+  ctx.fillStyle = pal.bg;
+  ctx.font = '700 16px "Space Mono"';
+  ctx.textAlign = 'left';
+  ctx.fillText('CRUCIBLE TCG · FAN CONCEPT', 30, canvas.height-30);
+  ctx.textAlign = 'right';
+  ctx.fillText(val('setCode'), canvas.width-30, canvas.height-30);
+  ctx.restore();
+
+  // texture pass
+  drawGrain(val('grain')/100 * 0.5);
+  drawEdgeWear(val('wear')/100 * 0.5);
+  drawScratches(val('scratch')/100 * 0.5);
+  drawGloss(val('gloss')/100 * 0.5);
+  drawDust(val('dust')/100 * 0.5);
+
+  // permanent watermark, always drawn last, always visible
+  drawWatermark(val('watermarkText') || 'PROXY', val('watermarkOpacity')/100);
+}
+
+function drawBack(){
+  const pal = palettes[val('palette')];
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle = pal.back;
+  roundRectPath(0,0,canvas.width,canvas.height,36);
+  ctx.fill();
+
+  ctx.save();
+  ctx.strokeStyle = pal.gold;
+  ctx.lineWidth = 10;
+  roundRectPath(24,24,canvas.width-48,canvas.height-48,26);
+  ctx.stroke();
+  ctx.restore();
+
+  // original geometric emblem, centered
+  ctx.save();
+  ctx.translate(canvas.width/2, canvas.height/2 - 40);
+  ctx.strokeStyle = pal.accent;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const ang = i*Math.PI/3;
+    const x = Math.cos(ang)*160, y = Math.sin(ang)*160;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0,0,90,0,Math.PI*2);
+  ctx.strokeStyle = pal.gold;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.restore();
+
+  // micro-text ring (original, not security print)
+  ctx.save();
+  ctx.translate(canvas.width/2, canvas.height/2 - 40);
+  ctx.font = '600 11px "Space Mono"';
+  ctx.fillStyle = pal.gold;
+  const ringText = 'FAN CONCEPT DESIGN · NOT AN OFFICIAL PRODUCT · ';
+  const radius = 210;
+  for(let i=0;i<ringText.length;i++){
+    const ang = (i/ringText.length)*Math.PI*2;
+    ctx.save();
+    ctx.rotate(ang);
+    ctx.translate(0,-radius);
+    ctx.textAlign='center';
+    ctx.fillText(ringText[i],0,0);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = pal.cream;
+  ctx.font = '700 16px Rajdhani';
+  ctx.textAlign = 'center';
+  ctx.fillText('CRUCIBLE TCG', canvas.width/2, canvas.height-70);
+  ctx.font = '500 12px "Space Mono"';
+  ctx.fillStyle = '#a89fc9';
+  ctx.fillText('© Fan Concept Design — Not an official product', canvas.width/2, canvas.height-46);
+  ctx.restore();
+
+  drawGrain(val('grain')/100 * 0.4);
+  drawEdgeWear(val('wear')/100 * 0.5);
+  drawScratches(val('scratch')/100 * 0.4);
+  drawDust(val('dust')/100 * 0.5);
+
+  drawWatermark(val('watermarkText') || 'PROXY', Math.max(val('watermarkOpacity')/100 * 0.7, 0.10));
+}
+
+function wrapText(text,x,y,maxWidth,lineHeight){
+  const words = text.split(' ');
+  let line = '';
+  let cy = y;
+  for(let n=0;n<words.length;n++){
+    const testLine = line + words[n] + ' ';
+    const metrics = ctx.measureText(testLine);
+    if(metrics.width > maxWidth && n>0){
+      ctx.fillText(line, x, cy);
+      line = words[n] + ' ';
+      cy += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, cy);
+}
+
+function render(){
+  if(currentView==='front') drawFront(); else drawBack();
+}
+
+// wire up controls
+document.querySelectorAll('input, select, textarea').forEach(el=>{
+  el.addEventListener('input', ()=>{
+    document.getElementById('grainVal').textContent = val('grain')+'%';
+    document.getElementById('wearVal').textContent = val('wear')+'%';
+    document.getElementById('smudgeVal').textContent = val('smudge')+'%';
+    document.getElementById('scratchVal').textContent = val('scratch')+'%';
+    document.getElementById('glossVal').textContent = val('gloss')+'%';
+    document.getElementById('dustVal').textContent = val('dust')+'%';
+    document.getElementById('wmVal').textContent = val('watermarkOpacity')+'%';
+    document.getElementById('wmEcho').textContent = val('watermarkText') || 'PROXY';
+    render();
+  });
+});
+
+document.getElementById('showFront').addEventListener('click', ()=>{
+  currentView='front';
+  document.getElementById('showFront').classList.add('active');
+  document.getElementById('showBack').classList.remove('active');
+  render();
+});
+document.getElementById('showBack').addEventListener('click', ()=>{
+  currentView='back';
+  document.getElementById('showBack').classList.add('active');
+  document.getElementById('showFront').classList.remove('active');
+  render();
+});
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', ()=>fileInput.click());
+fileInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  img.onload = ()=>{ uploadedImg = img; render(); };
+  img.src = URL.createObjectURL(file);
+});
+
+function exportPNG(view){
+  const prevView = currentView;
+  currentView = view;
+  render();
+  const link = document.createElement('a');
+  link.download = `${val('creatureName').replace(/\s+/g,'_')}_${view}_PROXY.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  currentView = prevView;
+  render();
+}
+document.getElementById('exportFront').addEventListener('click', ()=>exportPNG('front'));
+document.getElementById('exportBack').addEventListener('click', ()=>exportPNG('back'));
+
+render();
+</script>
+</body>
+</html>
