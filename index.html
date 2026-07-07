@@ -208,13 +208,34 @@
     </div>
 
     <div class="section">
-      <h2>04 · Watermark <span class="locked-tag">ALWAYS OFF</span></h2>
+      <h2>04 · Watermark <span class="locked-tag">ALWAYS ON</span></h2>
       <label>Watermark text</label>
       <input type="text" id="watermarkText" value="PROXY">
-      <label>Visibility (min. floor enforced) <span class="slider-label" id="wmVal">0%</span></label>
-      <input type="range" id="watermarkOpacity" min="0" max="60" value="0">
+      <label>Visibility (min. floor enforced) <span class="slider-label" id="wmVal">18%</span></label>
+      <input type="range" id="watermarkOpacity" min="8" max="60" value="18">
       <p style="font-size:11px;color:#8b8680;line-height:1.5;margin-top:8px;">
-        The watermark cannot be fully disabled or hidden. It is baked into every exported file to keep this proxy clearly identifiable as fan-made.
+        Shown as a small corner tag only (not a full overlay) so it stays out of the way of the art. It can't be fully hidden — it keeps every export identifiable as fan-made.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>05 · Border Finish</h2>
+      <label>Border color</label>
+      <select id="borderColor">
+        <option value="silverFoil" selected>Silver Foil (SAR style)</option>
+        <option value="gold">Gold Shiny</option>
+        <option value="silver">Silver Shiny</option>
+        <option value="grey">Grey</option>
+        <option value="lightgrey">Light Grey</option>
+      </select>
+      <label>Border dot texture <span class="slider-label" id="borderDotsVal">0%</span></label>
+      <input type="range" id="borderDots" min="0" max="100" value="0">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer;">
+        <input type="checkbox" id="smudgeOnBorder" style="width:auto;accent-color:var(--ember);">
+        Show fingerprint smudge on the border too
+      </label>
+      <p style="font-size:11px;color:#8b8680;line-height:1.5;margin-top:6px;">
+        Unchecked = smudge stays inside the card, border stays clean. Checked = smudge also appears over the border finish. Set the smudge slider (section 03) to 0% for neither.
       </p>
     </div>
 
@@ -362,58 +383,201 @@ function drawEdgeWear(alpha){
 }
 
 function drawFingerprintSmudge(x,y,w,h,alpha){
+  // Full SAR/holo-foil style: continuous engraved crosshatch weave covering
+  // the ENTIRE area with no cell seams, plus a color-shifting rainbow sheen
+  // and fine sparkle — matching how real holo/SAR foil reads under light.
+  if(alpha<=0) return;
+
   ctx.save();
+  ctx.beginPath();
+  ctx.rect(x,y,w,h);
+  ctx.clip();
+
+  const cx = x+w/2, cy = y+h/2;
+  const diag = Math.sqrt(w*w+h*h) * 0.75;
+
+  // multiple continuous diagonal line passes at different angles/spacing —
+  // this is what produces the engraved crosshatch weave, with zero grid seams
+  // since each pass sweeps the full diagonal in one go.
   ctx.globalCompositeOperation = 'overlay';
-
-  // full-coverage smear pass — broad, soft oily patches spread across the whole card
-  ctx.globalAlpha = alpha * 0.6;
-  for(let i=0;i<14;i++){
-    const px = x + Math.random()*w;
-    const py = y + Math.random()*h;
-    const r = 50 + Math.random()*70;
-    const grad = ctx.createRadialGradient(px,py,2,px,py,r);
-    grad.addColorStop(0,'rgba(255,255,255,0.45)');
-    grad.addColorStop(0.6,'rgba(255,255,255,0.15)');
-    grad.addColorStop(1,'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(px,py,r,r*0.65,Math.random()*Math.PI,0,Math.PI*2);
-    ctx.fill();
-  }
-
-  // fine ridge-line pass — mimics actual fingerprint ridges, layered on top of the smears
-  ctx.globalAlpha = alpha * 0.5;
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  for(let cluster=0; cluster<8; cluster++){
-    const cx = x + Math.random()*w;
-    const cy = y + Math.random()*h;
-    const clusterAngle = Math.random()*Math.PI*2;
-    const clusterSize = 20 + Math.random()*18;
-    for(let ring=0; ring<7; ring++){
-      ctx.lineWidth = 0.6;
+  const passes = [
+    {angle: 26,  spacing: 2.6},
+    {angle: -26, spacing: 2.6},
+    {angle: 58,  spacing: 3.4},
+    {angle: -58, spacing: 3.4},
+  ];
+  passes.forEach(p=>{
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(p.angle*Math.PI/180);
+    ctx.translate(-cx,-cy);
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    for(let ly = cy-diag; ly < cy+diag; ly += p.spacing){
+      ctx.globalAlpha = Math.min(alpha * (0.6 + Math.random()*0.7), 1);
+      ctx.lineWidth = 0.5 + Math.random()*0.35;
       ctx.beginPath();
-      const rad = clusterSize * (0.3 + ring*0.12);
-      ctx.ellipse(cx,cy, rad, rad*0.8, clusterAngle, Math.random()*0.4, Math.PI*1.6+Math.random()*0.4);
+      ctx.moveTo(cx-diag, ly);
+      ctx.lineTo(cx+diag, ly);
       ctx.stroke();
     }
+    ctx.restore();
+  });
+
+  // holographic rainbow sheen — the color-shifting sweep seen on real foil
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = Math.min(alpha * 0.55, 0.6);
+  const rainbow = ctx.createLinearGradient(x, y, x+w, y+h);
+  rainbow.addColorStop(0,    'rgba(110,170,255,0.55)');
+  rainbow.addColorStop(0.22, 'rgba(255,215,130,0.45)');
+  rainbow.addColorStop(0.45, 'rgba(160,255,210,0.4)');
+  rainbow.addColorStop(0.68, 'rgba(255,140,210,0.45)');
+  rainbow.addColorStop(0.86, 'rgba(150,190,255,0.5)');
+  rainbow.addColorStop(1,    'rgba(255,235,170,0.4)');
+  ctx.fillStyle = rainbow;
+  ctx.fillRect(x,y,w,h);
+
+  // fine sparkle glints scattered evenly across the whole surface
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = Math.min(alpha * 1.1, 1);
+  ctx.fillStyle = '#ffffff';
+  const glintCount = Math.floor(650 * alpha) + 120;
+  for(let i=0;i<glintCount;i++){
+    const gx = x + Math.random()*w;
+    const gy = y + Math.random()*h;
+    const r = Math.random()*1.1+0.2;
+    ctx.beginPath();
+    ctx.arc(gx,gy,r,0,Math.PI*2);
+    ctx.fill();
   }
 
   ctx.restore();
 }
 
 function drawWatermark(text, alpha){
+  // Small, unobtrusive corner tag rather than a full tiled overlay.
+  // Kept intentionally minimal (not removable) so exports stay identifiable
+  // as fan-made rather than indistinguishable from an authentic card.
   ctx.save();
-  ctx.globalAlpha = Math.max(alpha, 0.10);
+  ctx.globalAlpha = Math.max(alpha, 0.08);
   ctx.fillStyle = '#ffffff';
-  ctx.font = '700 26px "Space Mono", monospace';
-  ctx.textAlign = 'center';
-  ctx.translate(canvas.width/2, canvas.height/2);
-  ctx.rotate(-Math.PI/8);
-  for(let row=-6; row<=6; row++){
-    for(let col=-3; col<=3; col++){
-      ctx.fillText(text, col*220, row*110);
-    }
+  ctx.font = '700 13px "Space Mono", monospace';
+  ctx.textAlign = 'right';
+  ctx.translate(canvas.width - 18, canvas.height - 18);
+  ctx.rotate(-Math.PI/16);
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+// ---- Shiny metallic border ring (color presets + dot/foil texture) ----
+function roundRectPath2D(x,y,w,h,r){
+  const p = new Path2D();
+  p.moveTo(x+r,y);
+  p.arcTo(x+w,y,x+w,y+h,r);
+  p.arcTo(x+w,y+h,x,y+h,r);
+  p.arcTo(x,y+h,x,y,r);
+  p.arcTo(x,y,x+w,y,r);
+  p.closePath();
+  return p;
+}
+
+function getBorderGradient(style){
+  const grad = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+  if(style==='silverFoil'){
+    // cool, dark-to-bright monochrome engraved-metal look, matching the
+    // reference card's border — no color tint, just tonal contrast
+    grad.addColorStop(0,'#1f2124');
+    grad.addColorStop(0.18,'#5a5d61');
+    grad.addColorStop(0.38,'#c9cbce');
+    grad.addColorStop(0.5,'#f2f3f4');
+    grad.addColorStop(0.62,'#c9cbce');
+    grad.addColorStop(0.82,'#4b4d50');
+    grad.addColorStop(1,'#1f2124');
+  } else if(style==='gold'){
+    grad.addColorStop(0,'#7a5a06');
+    grad.addColorStop(0.22,'#FFD700');
+    grad.addColorStop(0.5,'#FFF6D5');
+    grad.addColorStop(0.78,'#E8A33D');
+    grad.addColorStop(1,'#7a5a06');
+  } else if(style==='silver'){
+    grad.addColorStop(0,'#4a4a4a');
+    grad.addColorStop(0.22,'#E8E8E8');
+    grad.addColorStop(0.5,'#FFFFFF');
+    grad.addColorStop(0.78,'#B0B0B0');
+    grad.addColorStop(1,'#4a4a4a');
+  } else if(style==='grey'){
+    grad.addColorStop(0,'#4f4f4f');
+    grad.addColorStop(0.5,'#8a8a8a');
+    grad.addColorStop(1,'#4f4f4f');
+  } else { // lightgrey
+    grad.addColorStop(0,'#a5a5a5');
+    grad.addColorStop(0.5,'#d9d9d9');
+    grad.addColorStop(1,'#a5a5a5');
   }
+  return grad;
+}
+
+function drawBorderRing(){
+  const outerMargin = 10, ringWidth = 22;
+  const outerP = roundRectPath2D(outerMargin, outerMargin, canvas.width-outerMargin*2, canvas.height-outerMargin*2, 30);
+  const innerP = roundRectPath2D(outerMargin+ringWidth, outerMargin+ringWidth, canvas.width-(outerMargin+ringWidth)*2, canvas.height-(outerMargin+ringWidth)*2, 20);
+  const ring = new Path2D();
+  ring.addPath(outerP);
+  ring.addPath(innerP);
+
+  ctx.save();
+  ctx.fillStyle = getBorderGradient(val('borderColor'));
+  ctx.fill(ring, 'evenodd');
+
+  // thin dark edge lines framing the foil strip (outer card edge + inner
+  // boundary against the art), like the crisp rim seen on real foil cards
+  ctx.save();
+  ctx.strokeStyle = 'rgba(10,10,10,0.75)';
+  ctx.lineWidth = 2;
+  ctx.stroke(outerP);
+  ctx.stroke(innerP);
+  ctx.restore();
+
+  // shiny diagonal highlight sweep, confined to the ring
+  ctx.save();
+  ctx.clip(ring, 'evenodd');
+  const sweep = ctx.createLinearGradient(0,0,canvas.width,canvas.height*0.5);
+  sweep.addColorStop(0,'rgba(255,255,255,0)');
+  sweep.addColorStop(0.45,'rgba(255,255,255,0.55)');
+  sweep.addColorStop(0.55,'rgba(255,255,255,0)');
+  ctx.fillStyle = sweep;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.restore();
+
+  // holo-foil dot texture, confined to the ring, 0-100% visibility slider
+  const dotVis = val('borderDots')/100;
+  if(dotVis > 0){
+    ctx.save();
+    ctx.clip(ring, 'evenodd');
+    ctx.globalAlpha = dotVis;
+    for(let i=0;i<900;i++){
+      const px = Math.random()*canvas.width;
+      const py = Math.random()*canvas.height;
+      const r = Math.random()*1.3+0.3;
+      const b = 140 + Math.random()*115;
+      ctx.fillStyle = `rgba(${b|0},${b|0},${b|0},0.85)`;
+      ctx.beginPath();
+      ctx.arc(px,py,r,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // optional: fingerprint smudge also on the border ring (off by default —
+  // border stays clean unless the checkbox is ticked)
+  const smudgeOnBorder = document.getElementById('smudgeOnBorder').checked;
+  const smudgeAlpha = val('smudge')/100;
+  if(smudgeOnBorder && smudgeAlpha > 0){
+    ctx.save();
+    ctx.clip(ring, 'evenodd');
+    drawFingerprintSmudge(0,0,canvas.width,canvas.height,smudgeAlpha);
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
@@ -559,35 +723,28 @@ function drawFront(){
   ctx.fillText(val('creatureHP'), canvas.width-44, 66);
   ctx.restore();
 
-  // bottom scrim + ability panel, floating over the art near the base
-  const panelY = canvas.height - 300;
+  // bottom scrim so ability text stays legible directly over the art — no solid box
+  const panelY = canvas.height - 260;
   ctx.save();
-  const botScrim = ctx.createLinearGradient(0,panelY-60,0,canvas.height);
+  const botScrim = ctx.createLinearGradient(0,panelY-50,0,canvas.height);
   botScrim.addColorStop(0,'rgba(0,0,0,0)');
-  botScrim.addColorStop(1,'rgba(0,0,0,0.55)');
+  botScrim.addColorStop(1,'rgba(0,0,0,0.72)');
   ctx.fillStyle = botScrim;
-  ctx.fillRect(0,panelY-60,canvas.width,canvas.height-(panelY-60));
+  ctx.fillRect(0,panelY-50,canvas.width,canvas.height-(panelY-50));
   ctx.restore();
 
   ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.fillStyle = pal.cream;
-  roundRectPath(30, panelY, canvas.width-60, 230, 18);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = pal.bg;
-  ctx.lineWidth = 3;
-  roundRectPath(30, panelY, canvas.width-60, 230, 18);
-  ctx.stroke();
-
-  ctx.fillStyle = pal.accent;
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = pal.gold;
   ctx.font = '700 22px Rajdhani';
   ctx.textAlign = 'left';
-  ctx.fillText(val('abilityName').toUpperCase(), 50, panelY+38);
+  ctx.fillText(val('abilityName').toUpperCase(), 44, panelY+30);
 
-  ctx.fillStyle = pal.bg;
+  ctx.fillStyle = '#ffffff';
   ctx.font = '500 17px Rajdhani';
-  wrapText(val('abilityText'), 50, panelY+72, canvas.width-120, 24);
+  ctx.shadowBlur = 5;
+  wrapText(val('abilityText'), 44, panelY+64, canvas.width-88, 24);
   ctx.restore();
 
   // wordmark + set code
@@ -612,13 +769,8 @@ function drawFront(){
 
   ctx.restore(); // end card-silhouette clip
 
-  // outer border frame, drawn on top of the clip
-  ctx.save();
-  ctx.strokeStyle = pal.gold;
-  ctx.lineWidth = 10;
-  roundRectPath(12,12,canvas.width-24,canvas.height-24,28);
-  ctx.stroke();
-  ctx.restore();
+  // shiny metallic border ring (color + dot texture selectable in sidebar)
+  drawBorderRing();
 
   // permanent watermark, always drawn last, always visible
   drawWatermark(val('watermarkText') || 'PROXY', val('watermarkOpacity')/100);
@@ -631,13 +783,6 @@ function drawBack(){
   ctx.fillStyle = pal.back;
   roundRectPath(0,0,canvas.width,canvas.height,34);
   ctx.fill();
-
-  ctx.save();
-  ctx.strokeStyle = pal.gold;
-  ctx.lineWidth = 10;
-  roundRectPath(24,24,canvas.width-48,canvas.height-48,26);
-  ctx.stroke();
-  ctx.restore();
 
   // original geometric emblem, centered
   ctx.save();
@@ -692,7 +837,9 @@ function drawBack(){
   drawScratches(val('scratch')/100 * 0.4);
   drawDust(val('dust')/100 * 0.5);
 
-  drawWatermark(val('watermarkText') || 'PROXY', Math.max(val('watermarkOpacity')/100 * 0.7, 0.10));
+  drawBorderRing();
+
+  drawWatermark(val('watermarkText') || 'PROXY', Math.max(val('watermarkOpacity')/100 * 0.7, 0.08));
 }
 
 function wrapText(text,x,y,maxWidth,lineHeight){
@@ -729,6 +876,7 @@ document.querySelectorAll('input, select, textarea').forEach(el=>{
     document.getElementById('dustVal').textContent = val('dust')+'%';
     document.getElementById('wmVal').textContent = val('watermarkOpacity')+'%';
     document.getElementById('wmEcho').textContent = val('watermarkText') || 'PROXY';
+    document.getElementById('borderDotsVal').textContent = val('borderDots')+'%';
     render();
   });
 });
@@ -748,6 +896,8 @@ document.getElementById('resetCrop').addEventListener('click', ()=>{
   resetCropToCenter();
   render();
 });
+
+document.getElementById('smudgeOnBorder').addEventListener('change', render);
 
 document.getElementById('showFront').addEventListener('click', ()=>{
   currentView='front';
