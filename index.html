@@ -382,16 +382,45 @@ function drawEdgeWear(alpha){
   ctx.restore();
 }
 
+// Cache for the expensive foil/smudge layer — this used to be regenerated
+// (hundreds of lines + up to ~770 sparkle circles, all with fresh Math.random()
+// calls) on EVERY render, including every keystroke and every slider tick.
+// That was the single biggest cost in the whole app. Now it's only rebuilt
+// when its own inputs actually change, and reused (a single drawImage call)
+// on every other render.
+const smudgeCache = { canvas: null, key: null };
+
+function buildSmudgeLayer(w, h, alpha){
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const octx = off.getContext('2d');
+  const savedCtx = ctx;
+  // temporarily point the shared draw helper at the offscreen context
+  drawFingerprintSmudgeRaw(octx, 0, 0, w, h, alpha);
+  return off;
+}
+
 function drawFingerprintSmudge(x,y,w,h,alpha){
+  if(alpha<=0) return;
+  const key = `${Math.round(w)}x${Math.round(h)}@${Math.round(alpha*100)}`;
+  if(!smudgeCache.canvas || smudgeCache.key !== key){
+    smudgeCache.canvas = buildSmudgeLayer(w, h, alpha);
+    smudgeCache.key = key;
+  }
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.drawImage(smudgeCache.canvas, x, y);
+  ctx.restore();
+}
+
+function drawFingerprintSmudgeRaw(targetCtx, x, y, w, h, alpha){
   // Full SAR/holo-foil style: continuous engraved crosshatch weave covering
   // the ENTIRE area with no cell seams, plus a color-shifting rainbow sheen
   // and fine sparkle — matching how real holo/SAR foil reads under light.
-  if(alpha<=0) return;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x,y,w,h);
-  ctx.clip();
+  targetCtx.save();
+  targetCtx.beginPath();
+  targetCtx.rect(x,y,w,h);
+  targetCtx.clip();
 
   const cx = x+w/2, cy = y+h/2;
   const diag = Math.sqrt(w*w+h*h) * 0.75;
@@ -399,58 +428,58 @@ function drawFingerprintSmudge(x,y,w,h,alpha){
   // multiple continuous diagonal line passes at different angles/spacing —
   // this is what produces the engraved crosshatch weave, with zero grid seams
   // since each pass sweeps the full diagonal in one go.
-  ctx.globalCompositeOperation = 'overlay';
+  targetCtx.globalCompositeOperation = 'overlay';
   const passes = [
-    {angle: 26,  spacing: 2.6},
-    {angle: -26, spacing: 2.6},
-    {angle: 58,  spacing: 3.4},
-    {angle: -58, spacing: 3.4},
+    {angle: 26,  spacing: 3.4},
+    {angle: -26, spacing: 3.4},
+    {angle: 58,  spacing: 4.2},
+    {angle: -58, spacing: 4.2},
   ];
   passes.forEach(p=>{
-    ctx.save();
-    ctx.translate(cx,cy);
-    ctx.rotate(p.angle*Math.PI/180);
-    ctx.translate(-cx,-cy);
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    targetCtx.save();
+    targetCtx.translate(cx,cy);
+    targetCtx.rotate(p.angle*Math.PI/180);
+    targetCtx.translate(-cx,-cy);
+    targetCtx.strokeStyle = 'rgba(255,255,255,0.95)';
     for(let ly = cy-diag; ly < cy+diag; ly += p.spacing){
-      ctx.globalAlpha = Math.min(alpha * (0.6 + Math.random()*0.7), 1);
-      ctx.lineWidth = 0.5 + Math.random()*0.35;
-      ctx.beginPath();
-      ctx.moveTo(cx-diag, ly);
-      ctx.lineTo(cx+diag, ly);
-      ctx.stroke();
+      targetCtx.globalAlpha = Math.min(alpha * (0.6 + Math.random()*0.7), 1);
+      targetCtx.lineWidth = 0.5 + Math.random()*0.35;
+      targetCtx.beginPath();
+      targetCtx.moveTo(cx-diag, ly);
+      targetCtx.lineTo(cx+diag, ly);
+      targetCtx.stroke();
     }
-    ctx.restore();
+    targetCtx.restore();
   });
 
   // holographic rainbow sheen — the color-shifting sweep seen on real foil
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = Math.min(alpha * 0.55, 0.6);
-  const rainbow = ctx.createLinearGradient(x, y, x+w, y+h);
+  targetCtx.globalCompositeOperation = 'screen';
+  targetCtx.globalAlpha = Math.min(alpha * 0.55, 0.6);
+  const rainbow = targetCtx.createLinearGradient(x, y, x+w, y+h);
   rainbow.addColorStop(0,    'rgba(110,170,255,0.55)');
   rainbow.addColorStop(0.22, 'rgba(255,215,130,0.45)');
   rainbow.addColorStop(0.45, 'rgba(160,255,210,0.4)');
   rainbow.addColorStop(0.68, 'rgba(255,140,210,0.45)');
   rainbow.addColorStop(0.86, 'rgba(150,190,255,0.5)');
   rainbow.addColorStop(1,    'rgba(255,235,170,0.4)');
-  ctx.fillStyle = rainbow;
-  ctx.fillRect(x,y,w,h);
+  targetCtx.fillStyle = rainbow;
+  targetCtx.fillRect(x,y,w,h);
 
   // fine sparkle glints scattered evenly across the whole surface
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = Math.min(alpha * 1.1, 1);
-  ctx.fillStyle = '#ffffff';
-  const glintCount = Math.floor(650 * alpha) + 120;
+  targetCtx.globalCompositeOperation = 'screen';
+  targetCtx.globalAlpha = Math.min(alpha * 1.1, 1);
+  targetCtx.fillStyle = '#ffffff';
+  const glintCount = Math.floor(320 * alpha) + 80;
   for(let i=0;i<glintCount;i++){
     const gx = x + Math.random()*w;
     const gy = y + Math.random()*h;
     const r = Math.random()*1.1+0.2;
-    ctx.beginPath();
-    ctx.arc(gx,gy,r,0,Math.PI*2);
-    ctx.fill();
+    targetCtx.beginPath();
+    targetCtx.arc(gx,gy,r,0,Math.PI*2);
+    targetCtx.fill();
   }
 
-  ctx.restore();
+  targetCtx.restore();
 }
 
 function drawWatermark(text, alpha){
@@ -483,8 +512,6 @@ function roundRectPath2D(x,y,w,h,r){
 function getBorderGradient(style){
   const grad = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
   if(style==='silverFoil'){
-    // cool, dark-to-bright monochrome engraved-metal look, matching the
-    // reference card's border — no color tint, just tonal contrast
     grad.addColorStop(0,'#1f2124');
     grad.addColorStop(0.18,'#5a5d61');
     grad.addColorStop(0.38,'#c9cbce');
@@ -508,7 +535,7 @@ function getBorderGradient(style){
     grad.addColorStop(0,'#4f4f4f');
     grad.addColorStop(0.5,'#8a8a8a');
     grad.addColorStop(1,'#4f4f4f');
-  } else { // lightgrey
+  } else {
     grad.addColorStop(0,'#a5a5a5');
     grad.addColorStop(0.5,'#d9d9d9');
     grad.addColorStop(1,'#a5a5a5');
@@ -528,8 +555,6 @@ function drawBorderRing(){
   ctx.fillStyle = getBorderGradient(val('borderColor'));
   ctx.fill(ring, 'evenodd');
 
-  // thin dark edge lines framing the foil strip (outer card edge + inner
-  // boundary against the art), like the crisp rim seen on real foil cards
   ctx.save();
   ctx.strokeStyle = 'rgba(10,10,10,0.75)';
   ctx.lineWidth = 2;
@@ -537,7 +562,6 @@ function drawBorderRing(){
   ctx.stroke(innerP);
   ctx.restore();
 
-  // shiny diagonal highlight sweep, confined to the ring
   ctx.save();
   ctx.clip(ring, 'evenodd');
   const sweep = ctx.createLinearGradient(0,0,canvas.width,canvas.height*0.5);
@@ -548,7 +572,6 @@ function drawBorderRing(){
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.restore();
 
-  // holo-foil dot texture, confined to the ring, 0-100% visibility slider
   const dotVis = val('borderDots')/100;
   if(dotVis > 0){
     ctx.save();
@@ -567,8 +590,6 @@ function drawBorderRing(){
     ctx.restore();
   }
 
-  // optional: fingerprint smudge also on the border ring (off by default —
-  // border stays clean unless the checkbox is ticked)
   const smudgeOnBorder = document.getElementById('smudgeOnBorder').checked;
   const smudgeAlpha = val('smudge')/100;
   if(smudgeOnBorder && smudgeAlpha > 0){
@@ -591,9 +612,6 @@ function roundRectPath(x,y,w,h,r){
   ctx.closePath();
 }
 
-// ---- Full-art image placement (fixes "shows whole card or half" bug) ----
-// The image is always cover-fit to the FULL canvas (not a sub-window), so the
-// math is a single, consistent calculation regardless of frame style.
 function getCoverScale(){
   if(!uploadedImg) return 1;
   return Math.max(canvas.width/uploadedImg.width, canvas.height/uploadedImg.height);
@@ -624,13 +642,11 @@ function drawFullArt(pal){
     const scale = getCoverScale() * imgZoomFactor;
     const dw = uploadedImg.width*scale, dh = uploadedImg.height*scale;
     ctx.drawImage(uploadedImg, imgPosX, imgPosY, dw, dh);
-    // subtle darken so overlaid text stays legible on any art
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.10)';
     ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.restore();
   } else {
-    // placeholder painterly background + silhouette, full bleed
     const grad = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
     grad.addColorStop(0, pal.accent);
     grad.addColorStop(1, pal.bg);
@@ -656,7 +672,6 @@ function drawCornerAccents(pal, frameStyle){
   ctx.save();
   ctx.fillStyle = pal.accent;
   if(frameStyle==='hex'){
-    // top-left and bottom-right angled cut accents
     ctx.beginPath();
     ctx.moveTo(0,0); ctx.lineTo(70,0); ctx.lineTo(0,70); ctx.closePath(); ctx.fill();
     ctx.beginPath();
@@ -682,18 +697,14 @@ function drawFront(){
   const frameStyle = val('frameStyle');
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // clip everything to the rounded card silhouette
   ctx.save();
   roundRectPath(0,0,canvas.width,canvas.height,34);
   ctx.clip();
 
-  // FULL-BLEED ART — covers the entire card front, edge to edge
   drawFullArt(pal);
 
-  // fingerprint smudge sits directly on the art, full coverage
   drawFingerprintSmudge(0,0,canvas.width,canvas.height, val('smudge')/100);
 
-  // top scrim so name/HP stay legible over any art
   ctx.save();
   const topScrim = ctx.createLinearGradient(0,0,0,180);
   topScrim.addColorStop(0,'rgba(0,0,0,0.55)');
@@ -702,7 +713,6 @@ function drawFront(){
   ctx.fillRect(0,0,canvas.width,180);
   ctx.restore();
 
-  // name (top-left, over art)
   ctx.save();
   ctx.fillStyle = pal.cream;
   ctx.font = '700 34px Rajdhani';
@@ -713,7 +723,6 @@ function drawFront(){
   ctx.fillText(val('creatureType').toUpperCase(), 44, 92);
   ctx.restore();
 
-  // HP (top-right, over art)
   ctx.save();
   ctx.textAlign = 'right';
   ctx.fillStyle = pal.cream;
@@ -723,7 +732,6 @@ function drawFront(){
   ctx.fillText(val('creatureHP'), canvas.width-44, 66);
   ctx.restore();
 
-  // bottom scrim so ability text stays legible directly over the art — no solid box
   const panelY = canvas.height - 260;
   ctx.save();
   const botScrim = ctx.createLinearGradient(0,panelY-50,0,canvas.height);
@@ -747,7 +755,6 @@ function drawFront(){
   wrapText(val('abilityText'), 44, panelY+64, canvas.width-88, 24);
   ctx.restore();
 
-  // wordmark + set code
   ctx.save();
   ctx.fillStyle = pal.cream;
   ctx.font = '700 14px "Space Mono"';
@@ -757,22 +764,18 @@ function drawFront(){
   ctx.fillText(val('setCode'), canvas.width-30, canvas.height-16);
   ctx.restore();
 
-  // decorative corner accents (from "Corner accent style" selector)
   drawCornerAccents(pal, frameStyle);
 
-  // texture pass, applied to the whole full-bleed card
   drawGrain(val('grain')/100 * 0.5);
   drawEdgeWear(val('wear')/100 * 0.5);
   drawScratches(val('scratch')/100 * 0.5);
   drawGloss(val('gloss')/100 * 0.5);
   drawDust(val('dust')/100 * 0.5);
 
-  ctx.restore(); // end card-silhouette clip
+  ctx.restore();
 
-  // shiny metallic border ring (color + dot texture selectable in sidebar)
   drawBorderRing();
 
-  // permanent watermark, always drawn last, always visible
   drawWatermark(val('watermarkText') || 'PROXY', val('watermarkOpacity')/100);
 }
 
@@ -784,7 +787,6 @@ function drawBack(){
   roundRectPath(0,0,canvas.width,canvas.height,34);
   ctx.fill();
 
-  // original geometric emblem, centered
   ctx.save();
   ctx.translate(canvas.width/2, canvas.height/2 - 40);
   ctx.strokeStyle = pal.accent;
@@ -804,7 +806,6 @@ function drawBack(){
   ctx.stroke();
   ctx.restore();
 
-  // micro-text ring (original, not security print)
   ctx.save();
   ctx.translate(canvas.width/2, canvas.height/2 - 40);
   ctx.font = '600 11px "Space Mono"';
@@ -864,9 +865,8 @@ function render(){
   if(currentView==='front') drawFront(); else drawBack();
 }
 
-// wire up standard controls
 document.querySelectorAll('input, select, textarea').forEach(el=>{
-  if(el.id === 'imgZoom') return; // handled separately below
+  if(el.id === 'imgZoom') return;
   el.addEventListener('input', ()=>{
     document.getElementById('grainVal').textContent = val('grain')+'%';
     document.getElementById('wearVal').textContent = val('wear')+'%';
@@ -881,7 +881,6 @@ document.querySelectorAll('input, select, textarea').forEach(el=>{
   });
 });
 
-// zoom slider — 100%-300% maps to imgZoomFactor 1.0-3.0
 const zoomSlider = document.getElementById('imgZoom');
 zoomSlider.addEventListener('input', ()=>{
   imgZoomFactor = Number(zoomSlider.value)/100;
@@ -928,14 +927,13 @@ fileInput.addEventListener('change', (e)=>{
   img.src = URL.createObjectURL(file);
 });
 
-// ---- Drag-to-pan cropping on the canvas (front view only) ----
 let isDragging = false;
 let dragStartClientX = 0, dragStartClientY = 0;
 let dragStartPosX = 0, dragStartPosY = 0;
 
 function getCanvasScaleFactor(){
   const rect = canvas.getBoundingClientRect();
-  return canvas.width / rect.width; // internal px per CSS px
+  return canvas.width / rect.width;
 }
 
 function startDrag(clientX, clientY){
