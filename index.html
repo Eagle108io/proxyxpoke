@@ -382,12 +382,6 @@ function drawEdgeWear(alpha){
   ctx.restore();
 }
 
-// Cache for the expensive foil/smudge layer — this used to be regenerated
-// (hundreds of lines + up to ~770 sparkle circles, all with fresh Math.random()
-// calls) on EVERY render, including every keystroke and every slider tick.
-// That was the single biggest cost in the whole app. Now it's only rebuilt
-// when its own inputs actually change, and reused (a single drawImage call)
-// on every other render.
 const smudgeCache = { canvas: null, key: null };
 
 function buildSmudgeLayer(w, h, alpha){
@@ -395,7 +389,6 @@ function buildSmudgeLayer(w, h, alpha){
   off.width = w; off.height = h;
   const octx = off.getContext('2d');
   const savedCtx = ctx;
-  // temporarily point the shared draw helper at the offscreen context
   drawFingerprintSmudgeRaw(octx, 0, 0, w, h, alpha);
   return off;
 }
@@ -414,9 +407,6 @@ function drawFingerprintSmudge(x,y,w,h,alpha){
 }
 
 function drawFingerprintSmudgeRaw(targetCtx, x, y, w, h, alpha){
-  // Full SAR/holo-foil style: continuous engraved crosshatch weave covering
-  // the ENTIRE area with no cell seams, plus a color-shifting rainbow sheen
-  // and fine sparkle — matching how real holo/SAR foil reads under light.
   targetCtx.save();
   targetCtx.beginPath();
   targetCtx.rect(x,y,w,h);
@@ -425,9 +415,6 @@ function drawFingerprintSmudgeRaw(targetCtx, x, y, w, h, alpha){
   const cx = x+w/2, cy = y+h/2;
   const diag = Math.sqrt(w*w+h*h) * 0.75;
 
-  // multiple continuous diagonal line passes at different angles/spacing —
-  // this is what produces the engraved crosshatch weave, with zero grid seams
-  // since each pass sweeps the full diagonal in one go.
   targetCtx.globalCompositeOperation = 'overlay';
   const passes = [
     {angle: 26,  spacing: 3.4},
@@ -452,7 +439,6 @@ function drawFingerprintSmudgeRaw(targetCtx, x, y, w, h, alpha){
     targetCtx.restore();
   });
 
-  // holographic rainbow sheen — the color-shifting sweep seen on real foil
   targetCtx.globalCompositeOperation = 'screen';
   targetCtx.globalAlpha = Math.min(alpha * 0.55, 0.6);
   const rainbow = targetCtx.createLinearGradient(x, y, x+w, y+h);
@@ -465,7 +451,7 @@ function drawFingerprintSmudgeRaw(targetCtx, x, y, w, h, alpha){
   targetCtx.fillStyle = rainbow;
   targetCtx.fillRect(x,y,w,h);
 
-  // fine sparkle glints scattered evenly across the whole surface
+  
   targetCtx.globalCompositeOperation = 'screen';
   targetCtx.globalAlpha = Math.min(alpha * 1.1, 1);
   targetCtx.fillStyle = '#ffffff';
@@ -483,9 +469,7 @@ function drawFingerprintSmudgeRaw(targetCtx, x, y, w, h, alpha){
 }
 
 function drawWatermark(text, alpha){
-  // Small, unobtrusive corner tag rather than a full tiled overlay.
-  // Kept intentionally minimal (not removable) so exports stay identifiable
-  // as fan-made rather than indistinguishable from an authentic card.
+  
   ctx.save();
   ctx.globalAlpha = Math.max(alpha, 0.08);
   ctx.fillStyle = '#ffffff';
